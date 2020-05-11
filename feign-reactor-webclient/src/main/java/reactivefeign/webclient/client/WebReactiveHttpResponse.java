@@ -5,8 +5,6 @@ import java.util.List;
 import java.util.Map;
 import org.reactivestreams.Publisher;
 import org.springframework.core.ParameterizedTypeReference;
-import org.springframework.core.ResolvableType;
-import org.springframework.core.codec.ByteArrayDecoder;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
 import org.springframework.http.ResponseEntity;
@@ -26,7 +24,6 @@ class WebReactiveHttpResponse<P extends Publisher<?>> implements ReactiveHttpRes
 	private final ParameterizedTypeReference returnActualType;
 	private final boolean wrapOnEntity;
 
-	private final ByteArrayDecoder byteArrayDecoder = new ByteArrayDecoder();
 
 	WebReactiveHttpResponse(ReactiveHttpRequest reactiveRequest,
 							ClientResponse clientResponse,
@@ -83,7 +80,12 @@ class WebReactiveHttpResponse<P extends Publisher<?>> implements ReactiveHttpRes
 	public Mono<byte[]> bodyData() {
 		Flux<DataBuffer> response = clientResponse.body(BodyExtractors.toDataBuffers());
 		return DataBufferUtils.join(response)
-				.map(dataBuffer -> byteArrayDecoder.decode(dataBuffer, ResolvableType.NONE, null, null))
+				.map(dataBuffer -> {
+					byte[] result = new byte[dataBuffer.readableByteCount()];
+					dataBuffer.read(result);
+					DataBufferUtils.release(dataBuffer);
+					return result;
+				})
 				.defaultIfEmpty(new byte[0]);
 	}
 }
