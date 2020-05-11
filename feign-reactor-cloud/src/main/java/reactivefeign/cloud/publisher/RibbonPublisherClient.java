@@ -2,7 +2,6 @@ package reactivefeign.cloud.publisher;
 
 import com.netflix.loadbalancer.Server;
 import com.netflix.loadbalancer.reactive.LoadBalancerCommand;
-import com.netflix.niws.loadbalancer.DiscoveryEnabledServer;
 import org.reactivestreams.Publisher;
 import org.springframework.web.util.UriComponentsBuilder;
 import reactivefeign.client.ReactiveHttpRequest;
@@ -25,7 +24,7 @@ import static reactivefeign.cloud.SubscriberContextUtils.withContext;
  */
 public class RibbonPublisherClient implements PublisherHttpClient {
 
-  private final LazyInitialized<LoadBalancerCommand<Object>> loadBalancerCommand;
+    private final LazyInitialized<LoadBalancerCommand<Object>> loadBalancerCommand;
     private final PublisherHttpClient publisherClient;
     private final Type publisherType;
 
@@ -38,7 +37,7 @@ public class RibbonPublisherClient implements PublisherHttpClient {
         this.publisherType = publisherType;
     }
 
-  @Override
+    @Override
     public Publisher<Object> executeRequest(ReactiveHttpRequest request) {
         LoadBalancerCommand<Object> loadBalancerCommand = this.loadBalancerCommand.get();
         if (loadBalancerCommand != null) {
@@ -53,12 +52,12 @@ public class RibbonPublisherClient implements PublisherHttpClient {
             } else {
                 throw new IllegalArgumentException("Unknown publisherType: " + publisherType);
             }
-    } else {
-      return publisherClient.executeRequest(request);
+        } else {
+            return publisherClient.executeRequest(request);
+        }
     }
-  }
 
-  private Publisher<?> getLoadBalancedPublisher(
+    private Publisher<?> getLoadBalancedPublisher(
             ReactiveHttpRequest request,
             LoadBalancerCommand<Object> loadBalancerCommand,
             Context context) {
@@ -67,25 +66,17 @@ public class RibbonPublisherClient implements PublisherHttpClient {
             ReactiveHttpRequest lbRequest = loadBalanceRequest(request, server);
 
             Publisher<Object> publisher = publisherClient.executeRequest(lbRequest);
-              return RxReactiveStreams.toObservable(withContext(publisher, publisherType, context));
-            });
+            return RxReactiveStreams.toObservable(withContext(publisher, publisherType, context));
+        });
 
-    return RxReactiveStreams.toPublisher(observable);
-  }
+        return RxReactiveStreams.toPublisher(observable);
+    }
 
-  protected ReactiveHttpRequest loadBalanceRequest(ReactiveHttpRequest request, Server server) {
-    String scheme = "http";
-    if (server instanceof DiscoveryEnabledServer
-        && ((DiscoveryEnabledServer) server).getInstanceInfo() != null
-        && server.getPort() == ((DiscoveryEnabledServer) server).getInstanceInfo().getSecurePort())
-      scheme = "https";
-    URI lbUrl =
-        UriComponentsBuilder.fromUri(request.uri())
-            .host(server.getHost())
-            .scheme(scheme)
-            .port(server.getPort())
-            .build(true)
-            .toUri();
-    return new ReactiveHttpRequest(request, lbUrl);
-  }
+    protected ReactiveHttpRequest loadBalanceRequest(ReactiveHttpRequest request, Server server) {
+        URI lbUrl = UriComponentsBuilder.fromUri(request.uri())
+                .host(server.getHost())
+                .port(server.getPort())
+                .build(true).toUri();
+        return new ReactiveHttpRequest(request, lbUrl);
+    }
 }
