@@ -1,21 +1,22 @@
 package reactivefeign.webclient.client;
 
+import java.lang.reflect.Type;
+import java.util.List;
+import java.util.Map;
 import org.reactivestreams.Publisher;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.core.ResolvableType;
 import org.springframework.core.codec.ByteArrayDecoder;
 import org.springframework.core.io.buffer.DataBuffer;
 import org.springframework.core.io.buffer.DataBufferUtils;
+import org.springframework.http.ResponseEntity;
 import org.springframework.web.reactive.function.BodyExtractors;
 import org.springframework.web.reactive.function.client.ClientResponse;
 import reactivefeign.client.ReactiveHttpRequest;
 import reactivefeign.client.ReactiveHttpResponse;
 import reactor.core.publisher.Flux;
 import reactor.core.publisher.Mono;
-
-import java.lang.reflect.Type;
-import java.util.List;
-import java.util.Map;
+import sun.reflect.generics.reflectiveObjects.ParameterizedTypeImpl;
 
 class WebReactiveHttpResponse<P extends Publisher<?>> implements ReactiveHttpResponse<P>{
 
@@ -23,6 +24,7 @@ class WebReactiveHttpResponse<P extends Publisher<?>> implements ReactiveHttpRes
 	private final ClientResponse clientResponse;
 	private final Type returnPublisherType;
 	private final ParameterizedTypeReference returnActualType;
+	private final boolean wrapOnEntity;
 
 	private final ByteArrayDecoder byteArrayDecoder = new ByteArrayDecoder();
 
@@ -32,7 +34,18 @@ class WebReactiveHttpResponse<P extends Publisher<?>> implements ReactiveHttpRes
 		this.reactiveRequest = reactiveRequest;
 		this.clientResponse = clientResponse;
 		this.returnPublisherType = returnPublisherType;
-		this.returnActualType = returnActualType;
+    if (returnActualType.getType() instanceof ParameterizedTypeImpl
+        && ((ParameterizedTypeImpl) returnActualType.getType())
+            .getRawType()
+            .equals(ResponseEntity.class)) {
+      this.returnActualType =
+          ParameterizedTypeReference.forType(
+              ((ParameterizedTypeImpl) returnActualType.getType()).getActualTypeArguments()[0]);
+      wrapOnEntity = true;
+    } else {
+      this.returnActualType = returnActualType;
+      wrapOnEntity = false;
+    }
 	}
 
 	@Override
@@ -53,7 +66,12 @@ class WebReactiveHttpResponse<P extends Publisher<?>> implements ReactiveHttpRes
 	@Override
 	public P body() {
 		if (returnPublisherType == Mono.class) {
-			return (P)clientResponse.bodyToMono(returnActualType);
+      if (wrapOnEntity) {
+        return (P) clientResponse.toEntity(returnActualType);
+        }
+			else {
+			  return (P)clientResponse.bodyToMono(returnActualType);
+      }
 		} else if(returnPublisherType == Flux.class){
 			return (P)clientResponse.bodyToFlux(returnActualType);
 		} else {
